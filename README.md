@@ -5,6 +5,7 @@ This script is designed to analyze and classify college data using Python. It ut
 ## Functionality 
 
 analyze_college_data(data_path): This function loads the college dataset from the specified path and performs data analysis and visualization. It displays basic information about the dataset, a correlation heatmap, scatter plots, kernel density estimation plots, and more to provide a better understanding of the dataset.
+
 classify_college_data(data_path): This function also loads the college dataset from the specified path, preprocesses the data and selects features, and then trains and evaluates multiple classification algorithm models. It returns evaluation metrics for each model, including recall, accuracy, precision, and F1 score.
 
 ## Technical Stack
