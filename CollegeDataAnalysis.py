@@ -5,275 +5,210 @@ Original file is located at
     https://colab.research.google.com/drive/1j_lZYdelAFK_LTnEeLhngnbyy3ywUK0C
 """
 
+import os
+import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 import seaborn as sns
+from matplotlib.backends.backend_pdf import PdfPages
+import warnings
+warnings.filterwarnings('ignore')
 
-"""#Descriptive Analytics
-
-"""
-
-data = pd.read_csv(r'College_Data.csv')
-data
-
-# Output file
-
-import matplotlib.backends.backend_pdf as pdf_backend
-
-pdf_filename = 'output_report.pdf'
-pdf_pages = pdf_backend.PdfPages(pdf_filename)
-
-data.head()
-
-# Visualize the graduation rate distribution (Descriptive)
-plt.figure(figsize=(8, 8))
-labels = ['<50%', '50-60%', '60-70%', '70-80%', '80-90%', '90-100%']
-bins = [0, 50, 60, 70, 80, 90, 100]
-data['Grad.Rate_Bin'] = pd.cut(data['Grad.Rate'], bins=bins, labels=labels)
-sizes = data['Grad.Rate_Bin'].value_counts()
-plt.pie(sizes, labels=labels, autopct='%1.1f%%', startangle=140, colors=sns.color_palette('pastel'))
-plt.title('Graduation Rate Distribution')
-pdf_pages.savefig()
-plt.show()
-
-# Visualize the distribution of public and private universities (Descriptive )
-plt.figure(figsize=(10, 6))
-sns.countplot(x='Private', data=data, palette='coolwarm')
-plt.title('Distribution of Private and Public Universities')
-pdf_pages.savefig()
-plt.show()
-
-# Visualize the student-faculty ratio in public and private universities (Descriptive)
-plt.figure(figsize=(10, 6))
-sns.barplot(x='Private', y='S.F.Ratio', data=data, palette='viridis')
-plt.title('Student-Faculty Ratio in Private and Public Universities')
-pdf_pages.savefig()
-plt.show()
-
-# Graduation Rate Distribution at Different Top 10% Levels
-# Assuming 'data' is your DataFrame containing 'Top10perc' and 'Grad.Rate' columns
-sns.violinplot(x='Top10perc', y='Grad.Rate', data=data)
-
-# Adding a title to the plot
-plt.title('Graduation Rate Distribution at Different Top 10% Levels')
-
-# Save to output file
-pdf_pages.savefig()
-
-# Display the plot
-plt.show()
-
-# Distribution of Out-of-state Tuition and Personal Spending
-
-sns.kdeplot(data['Outstate'], label='Outstate Tuition', shade=True)
-sns.kdeplot(data['Personal'], label='Personal Spending', shade=True)
-plt.title('Distribution of Out-of-state Tuition and Personal Spending')
-pdf_pages.savefig()
-
-# Trends in Out-of-state Tuition and Personal Spending
-
-data[['Outstate', 'Personal']].plot(kind='area', stacked=False)
-plt.title('Trends in Out-of-state Tuition and Personal Spending')
-pdf_pages.savefig()
-
-#7)Out-of-state Tuition Distribution by School Type
-sns.boxplot(x='Private', y='Outstate', data=data)
-plt.title('Out-of-state Tuition Distribution by School Type')
-pdf_pages.savefig()
-
-"""#Diagnostic Analytics
-
-"""
-
-!pip install catboost
-
+from sklearn.model_selection import StratifiedShuffleSplit, train_test_split
 from sklearn.preprocessing import StandardScaler
-from sklearn.model_selection import StratifiedShuffleSplit
-from sklearn.ensemble import RandomForestClassifier
+from sklearn.metrics import recall_score, accuracy_score, precision_score, f1_score, roc_curve, auc, classification_report
+from sklearn.ensemble import RandomForestClassifier, AdaBoostClassifier, GradientBoostingClassifier, RandomForestRegressor
 from sklearn.svm import SVC
-from sklearn.linear_model import LogisticRegression
+from sklearn.linear_model import LogisticRegression, LinearRegression
 from sklearn.neighbors import KNeighborsClassifier
 from sklearn.naive_bayes import GaussianNB
 from sklearn.tree import DecisionTreeClassifier
 from xgboost import XGBClassifier
 from catboost import CatBoostClassifier
-from sklearn.ensemble import AdaBoostClassifier
-from sklearn.ensemble import GradientBoostingClassifier
 
-from sklearn.metrics import classification_report, precision_score, recall_score, f1_score,accuracy_score,roc_curve,auc
-import warnings
-warnings.filterwarnings('ignore')
+def analyze_college_data(data_path, pdf_pages):
+    data = pd.read_csv(data_path)
 
-data.info()
+    # Statistical summary
+    summary = data.describe()
+    fig, ax = plt.subplots(figsize=(12, 8))
+    ax.axis('off')
+    ax.table(cellText=np.round(summary.values, 2), colLabels=summary.columns, rowLabels=summary.index, loc='center')
+    ax.set_title("Statistical Summary", fontweight="bold")
+    plt.tight_layout()
+    pdf_pages.savefig()
+    plt.close()
+    
+    # Graduation rate pie chart
+    plt.figure(figsize=(8,8))
+    labels = ['<50%', '50-60%', '60-70%', '70-80%', '80-90%', '90-100%']
+    bins = [0, 50, 60, 70, 80, 90, 100]
+    data['Grad.Rate_Bin'] = pd.cut(data['Grad.Rate'], bins=bins, labels=labels)
+    sizes = data['Grad.Rate_Bin'].value_counts().sort_index()
+    plt.pie(sizes, labels=labels, autopct='%1.1f%%', startangle=140, colors=sns.color_palette('pastel'))
+    plt.title('Graduation Rate Distribution')
+    pdf_pages.savefig()
+    plt.close()
+    
+    # Public vs Private countplot
+    plt.figure(figsize=(10,6))
+    sns.countplot(x='Private', data=data, palette='coolwarm')
+    plt.title('Distribution of Private and Public Universities')
+    pdf_pages.savefig()
+    plt.close()
+    
+    # Student-Faculty Ratio
+    plt.figure(figsize=(10,6))
+    sns.barplot(x='Private', y='S.F.Ratio', data=data, palette='viridis')
+    plt.title('Student-Faculty Ratio in Private vs Public Universities')
+    pdf_pages.savefig()
+    plt.close()
+    
+    # Correlation heatmap
+    plt.figure(figsize=(12,10))
+    sns.heatmap(data.corr(), annot=True, cmap='coolwarm', fmt=".2f")
+    plt.title('Correlation Heatmap')
+    pdf_pages.savefig()
+    plt.close()
+    
+    # Out-of-State Tuition vs Acceptance Rate
+    plt.figure(figsize=(10,6))
+    sns.scatterplot(x='Outstate', y='Accept', hue='Private', data=data, palette='Set1', s=100, alpha=0.7)
+    plt.title('Out-of-State Tuition vs Acceptance Rate')
+    pdf_pages.savefig()
+    plt.close()
+    
+    # KDE plots for Outstate Tuition & Personal Spending
+    plt.figure(figsize=(10,6))
+    sns.kdeplot(data['Outstate'], shade=True, label='Outstate Tuition')
+    sns.kdeplot(data['Personal'], shade=True, label='Personal Spending')
+    plt.title('Tuition and Personal Spending Distribution')
+    plt.legend()
+    pdf_pages.savefig()
+    plt.close()
+    
+    # Boxplot for Outstate Tuition by University Type
+    plt.figure(figsize=(10,6))
+    sns.boxplot(x='Private', y='Outstate', data=data, palette='Set2')
+    plt.title('Outstate Tuition by University Type')
+    pdf_pages.savefig()
+    plt.close()
 
-data.columns
+def classify_college_data(data_path, pdf_pages):
+    data = pd.read_csv(data_path)
+    data['Private'] = data['Private'].map({'Yes': 1, 'No': 0})
+    data.dropna(inplace=True)
+    
+    X = data.iloc[:, 2:]
+    y = data['Private'].values
 
-data
+    scaler = StandardScaler()
+    X_scaled = scaler.fit_transform(X)
+    
+    sss = StratifiedShuffleSplit(n_splits=5, test_size=0.2, random_state=42)
+    for train_idx, test_idx in sss.split(X_scaled, y):
+        X_train, X_test = X_scaled[train_idx], X_scaled[test_idx]
+        y_train, y_test = y[train_idx], y[test_idx]
+        break
+    
+    classifiers = [
+        ("Random Forest", RandomForestClassifier(random_state=42)),
+        ("SVM", SVC(probability=True, random_state=42)),
+        ("Logistic Regression", LogisticRegression(random_state=42)),
+        ("KNN", KNeighborsClassifier(n_neighbors=5)),
+        ("Naive Bayes", GaussianNB()),
+        ("Decision Tree", DecisionTreeClassifier(random_state=42)),
+        ("AdaBoost", AdaBoostClassifier(random_state=42)),
+        ("Gradient Boosting", GradientBoostingClassifier(random_state=42)),
+        ("XGBoost", XGBClassifier(use_label_encoder=False, eval_metric='logloss', random_state=42)),
+        ("CatBoost", CatBoostClassifier(logging_level='Silent', random_state=42))
+    ]
+    
+    results = {}
+    for name, clf in classifiers:
+        clf.fit(X_train, y_train)
+        y_pred = clf.predict(X_test)
+        results[name] = {
+            "Recall": recall_score(y_test, y_pred),
+            "Accuracy": accuracy_score(y_test, y_pred),
+            "Precision": precision_score(y_test, y_pred),
+            "F1": f1_score(y_test, y_pred, average='macro')
+        }
+        
+        if hasattr(clf, "predict_proba"):
+            y_proba = clf.predict_proba(X_test)[:, 1]
+        elif hasattr(clf, "decision_function"):
+            y_proba = clf.decision_function(X_test)
+        else:
+            y_proba = None
 
-# Create other visualizations for key factors/variables as needed
-# Scatter plot for comparing Out-of-State Tuition and Acceptance Rate (Diagnostic)
-plt.figure(figsize=(10, 6))
-sns.scatterplot(x='Outstate', y='Accept', hue='Private', data=data, palette='Set1')
-plt.title('Out-of-State Tuition vs Acceptance Rate')
-pdf_pages.savefig()
-plt.show()
+        if y_proba is not None:
+            fpr, tpr, _ = roc_curve(y_test, y_proba)
+            roc_auc = auc(fpr, tpr)
+            plt.figure(figsize=(8,6))
+            plt.plot(fpr, tpr, label=f'{name} (AUC = {roc_auc:.2f})')
+            plt.plot([0, 1], [0, 1], 'k--')
+            plt.xlabel('False Positive Rate')
+            plt.ylabel('True Positive Rate')
+            plt.title(f'ROC Curve - {name}')
+            plt.legend(loc='lower right')
+            pdf_pages.savefig()
+            plt.close()
+    
+    results_df = pd.DataFrame(results).T
+    results_df.plot(kind='bar', figsize=(12,8))
+    plt.title("Model Comparison")
+    plt.ylabel("Score")
+    plt.xticks(rotation=45)
+    plt.tight_layout()
+    pdf_pages.savefig()
+    plt.close()
+    
+    report = classification_report(y_test, classifiers[0][1].predict(X_test))
+    with open("classification_report.txt", "w") as f:
+        f.write(report)
 
-# Correlation Heatmap
+def prescriptive_analytics(data_path, pdf_pages):
+    data = pd.read_csv(data_path)
+    data.dropna(inplace=True)
+    data['Private'] = data['Private'].map({'Yes': 1, 'No': 0})
+    
+    features = data.drop(['Grad.Rate'] + (['Unnamed: 0'] if 'Unnamed: 0' in data.columns else []), axis=1)
+    target = data['Grad.Rate']
+    
+    # Linear Regression
+    lin_reg = LinearRegression()
+    lin_reg.fit(features, target)
+    coef = pd.DataFrame(lin_reg.coef_, features.columns, columns=['Coefficient'])
+    plt.figure(figsize=(12,6))
+    coef['Coefficient'].abs().sort_values(ascending=False).plot(kind='bar')
+    plt.title("Linear Regression Coefficients")
+    plt.tight_layout()
+    pdf_pages.savefig()
+    plt.close()
+    
+    # Random Forest Regressor
+    rf_reg = RandomForestRegressor(random_state=42)
+    rf_reg.fit(features, target)
+    imp = pd.Series(rf_reg.feature_importances_, index=features.columns)
+    plt.figure(figsize=(12,6))
+    imp.sort_values(ascending=False).plot(kind='bar')
+    plt.title("Random Forest Feature Importances")
+    plt.tight_layout()
+    pdf_pages.savefig()
+    plt.close()
 
-correlation_matrix = data.corr()
-sns.heatmap(correlation_matrix, annot=True, cmap='coolwarm', fmt=".2f")
-plt.title('Correlation Heatmap')
-pdf_pages.savefig()
+def main():
+    data_path = "College_Data.csv"
+    output_pdf = "output_report.pdf"
+    
+    with PdfPages(output_pdf) as pdf_pages:
+        analyze_college_data(data_path, pdf_pages)
+        classify_college_data(data_path, pdf_pages)
+        prescriptive_analytics(data_path, pdf_pages)
+    
+    print(f"Output saved to '{output_pdf}'.")
 
-# Out-of-state Tuition vs. Personal Spending
+if __name__ == "__main__":
+    main()
 
-sns.scatterplot(x='Outstate', y='Personal', hue='Private', data=data)
-plt.title('Out-of-state Tuition vs. Personal Spending')
-pdf_pages.savefig()
-
-# Pct. faculty with Ph.D.’s and Pct. faculty with terminal degree
-
-sns.scatterplot(x='PhD', y='Terminal', hue='Private', data=data)
-plt.title('Percentage of Faculty with Ph.D. vs. Terminal Degree')
-pdf_pages.savefig()
-
-# Graduation Rate vs. Out-of-state Tuition
-
-sns.scatterplot(x='Grad.Rate', y='Outstate', hue='Private', data=data)
-plt.title('Graduation Rate vs. Out-of-state Tuition')
-pdf_pages.savefig()
-
-"""# Predictive Analytics
-
-"""
-
-#Precdictive analysis about
-data = pd.read_csv(r'College_Data.csv')
-data
-
-
-X=data.iloc[:,2:]
-X=X.dropna()
-X
-
-data['Private'] = data['Private'].map({'Yes': 1, 'No': 0})
-y=data['Private'].values
-
-X.info()
-
-from sklearn.model_selection import StratifiedShuffleSplit
-
-# Assuming 'X' and 'y' are your features and target variable
-sss = StratifiedShuffleSplit(n_splits=5, test_size=0.2, random_state=0)
-
-# Display information about the StratifiedShuffleSplit object
-print(sss)
-print("Number of splits for training and testing sets:", sss.get_n_splits(X, y))
-
-# Iterate through the splits
-for train_index, test_index in sss.split(X, y):
-    print("Train indices:", train_index, "Test indices:", test_index)
-
-    # Use the indices to split your data into training and testing sets
-    X_train, X_test = X.iloc[train_index], X.iloc[test_index]
-    y_train, y_test = y[train_index], y[test_index]
-
-sss = StratifiedShuffleSplit(n_splits=5, test_size=0.2, random_state=0)
-print(sss)
-print("Number of splits for training and testing sets：", sss.get_n_splits(X, y))
-
-for train_index, test_index in sss.split(X, y):
-    print("train:", train_index, "test:", test_index)
-    X_train, X_test = X.iloc[train_index], X.iloc[test_index]
-    y_train, y_test = y[train_index], y[test_index]
-
-Classifiers = [["Random Forest", RandomForestClassifier()],
-               ["Support Vector Machine", SVC()],
-               ["LogisticRegression", LogisticRegression()],
-               ["KNN", KNeighborsClassifier(n_neighbors=5)],
-               ["Naive Bayes", GaussianNB()],
-               ["Decision Tree", DecisionTreeClassifier()],
-               ["AdaBoostClassifier", AdaBoostClassifier()],
-               ["GradientBoostingClassifier", GradientBoostingClassifier()],
-               ["XGB", XGBClassifier()],
-               ["CatBoost", CatBoostClassifier(logging_level='Silent')]
-               ]
-print('Original data features：', X.shape,
-      'Training data features：', X_train.shape,
-      'Testing data features：', X_test.shape)
-
-print('Original data labels：', y.shape,
-      '   Training data labels：', y_train.shape,
-      '   Testing data labels：', y_test.shape)
-
-Classify_result = []
-names = []
-prediction = []
-for name, classifier in Classifiers:
-    classifier = classifier
-
-    classifier.fit(X_train, y_train)
-    y_pred = classifier.predict(X_test)
-
-    recall = recall_score(y_test, y_pred)
-    ac=accuracy_score(y_test,y_pred)
-    precision = precision_score(y_test, y_pred)
-    f1=f1_score(y_test, y_pred, average='macro')
-
-    class_eva = pd.DataFrame([recall, precision,f1,ac])
-    Classify_result.append(class_eva)
-    name = pd.Series(name)
-    names.append(name)
-    y_pred = pd.Series(y_pred)
-    prediction.append(y_pred)
-
-names = pd.DataFrame(names)
-names = names[0].tolist()
-result = pd.concat(Classify_result, axis=1)
-result.columns = names
-result.index = ["recall", "precision","f1","ac"]
-result
-
-"""#Prescriptive Analytics"""
-
-# Using a linear regression model to identify factors influencing graduation rates
-data = pd.read_csv(r'College_Data.csv')
-data
-
-from sklearn.linear_model import LinearRegression
-
-
-
-# Convert the 'Private' column to numeric for analysis
-data['Private'] = data['Private'].map({'Yes': 1, 'No': 0})
-
-#Drop rows with missing values
-data.dropna(inplace=True)
-
-X = data.drop(['Unnamed: 0', 'Grad.Rate'], axis=1)  # Features
-y = data['Grad.Rate']  # Target variable
-
-model = LinearRegression()
-model.fit(X, y)
-
-# Get the coefficients
-coefficients = pd.DataFrame(model.coef_, X.columns, columns=['Coefficient'])
-print(coefficients)
-
-# Calculating the correlation with Expenditure
-expenditure_corr = data.corr()['Expend'].sort_values(ascending=False)
-
-# Visualizing the correlation
-plt.figure(figsize=(10,6))
-sns.barplot(x=expenditure_corr.index, y=expenditure_corr.values)
-plt.xticks(rotation=90)
-plt.title("Correlation of Various Factors with Expenditure")
-plt.ylabel("Correlation Coefficient")
-plt.xlabel("Factors")
-plt.tight_layout()
-pdf_pages.savefig()
-plt.show()
-
-# Close pdf file
-
-pdf_pages.close()
